@@ -204,7 +204,6 @@ private func eventTapCallback(
 
     // Find and quit the app under the cursor
     if let app = monitor.findAppUnderCursor() {
-        print("🔴 Quitting \(app.localizedName ?? "unknown")")
         app.terminate()
         return nil // swallow the event
     }

@@ -5,6 +5,7 @@ import ApplicationServices
 /// the app whose window thumbnail is under the cursor.
 class MissionControlQuit {
     fileprivate var eventTap: CFMachPort?
+    fileprivate var lastQuitTime: CFAbsoluteTime = 0
 
     func start() {
         // Prompt for Accessibility permission if needed
@@ -202,8 +203,15 @@ private func eventTapCallback(
         return Unmanaged.passUnretained(event)
     }
 
+    // Debounce — ignore if we just quit something (key repeat)
+    let now = CFAbsoluteTimeGetCurrent()
+    guard now - monitor.lastQuitTime > 0.5 else {
+        return nil // swallow repeated ⌘Q events
+    }
+
     // Find and quit the app under the cursor
     if let app = monitor.findAppUnderCursor() {
+        monitor.lastQuitTime = now
         app.terminate()
         return nil // swallow the event
     }

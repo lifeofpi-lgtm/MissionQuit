@@ -16,9 +16,12 @@ cp AppIcon.icns "$RES_DIR/AppIcon.icns"
 echo "✅ Built MissionQuit.app"
 
 if [ "$1" = "--install" ]; then
-    # Install to /Applications and code-sign in place with persistent identity
-    rm -rf /Applications/MissionQuit.app
-    cp -R MissionQuit.app /Applications/MissionQuit.app
+    # Update in place (preserves TCC/Accessibility permission)
+    mkdir -p /Applications/MissionQuit.app/Contents/MacOS
+    mkdir -p /Applications/MissionQuit.app/Contents/Resources
+    cp .build/debug/MissionQuit /Applications/MissionQuit.app/Contents/MacOS/MissionQuit
+    cp Info.plist /Applications/MissionQuit.app/Contents/Info.plist
+    cp AppIcon.icns /Applications/MissionQuit.app/Contents/Resources/AppIcon.icns
     xattr -cr /Applications/MissionQuit.app
     codesign --force --deep --sign "MissionQuit Dev" /Applications/MissionQuit.app
     echo "🔏 Code-signed (MissionQuit Dev)"

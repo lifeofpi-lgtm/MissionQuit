@@ -16,12 +16,12 @@ cp AppIcon.icns "$RES_DIR/AppIcon.icns"
 echo "✅ Built MissionQuit.app"
 
 if [ "$1" = "--install" ]; then
-    # Install to /Applications and code-sign
-    xattr -cr MissionQuit.app
-    codesign --force --sign - MissionQuit.app
-    echo "🔏 Code-signed (ad-hoc)"
+    # Install to /Applications and code-sign in place with persistent identity
     rm -rf /Applications/MissionQuit.app
     cp -R MissionQuit.app /Applications/MissionQuit.app
+    xattr -cr /Applications/MissionQuit.app
+    codesign --force --deep --sign "MissionQuit Dev" /Applications/MissionQuit.app
+    echo "🔏 Code-signed (MissionQuit Dev)"
     echo "📦 Installed to /Applications/MissionQuit.app"
     echo ""
     echo "⚠️  Grant Accessibility permission in System Settings if this is the first install."

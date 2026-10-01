@@ -5,7 +5,7 @@ Reworked the core of MissionQuit after empirical probing showed the original log
 - Mission Control detection fired constantly (the Dock's own window is always at layer 20), so ⌘Q was being intercepted everywhere and quit whatever app was under the cursor, not the frontmost app.
 - App identification used fuzzy substring matching of AX titles against app names, which could match on-screen text (e.g. the word "mail" in a terminal).
 
-Both replaced. New build installed to /Applications and running with Accessibility intact; verified via AX that the menu reports "Active".
+Both replaced. New build installed to /Applications and running with Accessibility intact; verified via AX that the menu reports "Active". User tried it and confirmed it is "much better now".
 
 ## Files Modified
 - Sources/MissionQuit/MissionControlQuit.swift: new detector, pid-based hit-test, modifier and autorepeat handling, AX timeout, swallow-on-miss inside Mission Control

@@ -12,15 +12,15 @@
   Irshad chose to leave that.
 
 ### Not verified
-- This folder was not fetched after the push. `git status` earlier showed `main` ahead of `origin/main` by 2.
+- The rebased build was not recompiled or launched after the rebase (only history changed, no code).
 
 ### Deferred
-- URGENT-ish: this folder holds 2 commits that are NOT on GitHub (fca7a3d "Fix Mission Control detection and app
-  identification; permission UX" and 8508e40 "docs: session handoff"). The public repo therefore still has the
-  OLD, buggy detection code, and now diverges from this folder because of a081e3b. Run `git pull --rebase`, then push.
-- Before pushing: those two commits track CLAUDE.md, handoff.md and decisions.md, which would become public. Review
-  them for local paths, or gitignore and untrack them as was done for the MD editor project, then push.
-- No commit was made for this entry because of the divergence above; commit it after the rebase.
+- Rebase done 2026-10-01: `git rebase origin/main` put the Mission Control fix and the handoff commits on top of
+  the license commit a081e3b, and the three local commits were re-authored with the noreply address. Reviewed
+  before rebasing: no emails, local paths or secrets in the code, README, CLAUDE.md, handoff.md or decisions.md.
+- NOT PUSHED YET. The public repo still has the old, buggy Mission Control detection until `git push` runs.
+  Pushing also makes CLAUDE.md, handoff.md and decisions.md public (they are tracked). Keep handoff.md free of
+  personal emails and local paths, or gitignore and untrack them first.
 
 ## Last Session Summary (2026-08-26)
 Reworked the core of MissionQuit after empirical probing showed the original logic was wrong in two places:

@@ -10,3 +10,5 @@ _Architectural and design decisions for this project. Updated by Claude Code dur
 - **2026-08-26** | Inside Mission Control, swallow ⌘Q when no quittable app is under the cursor | Passing it through would quit the frontmost app, which the user did not intend | Pass through (original behaviour)
 - **2026-08-26** | Only intercept when Command is the sole modifier (ignoring caps lock / fn) | ⌘⌥Q, ⌘⇧Q etc. are bound by other apps and should not be hijacked | Any event with the Command flag (original)
 - **2026-08-26** | Ship release builds from build.sh | No reason to install a debug binary | Debug (original)
+- **2026-10-01** | Add an MIT license (holder "Pasha I.") | Without a license nobody may legally reuse the public code; matches the MDmaster repo | GPL (not chosen, no reason to force derivatives open)
+- **2026-10-01** | Leave the Gmail author email in the six existing public commits | Irshad chose not to rewrite; a fresh repo would break the already-public URL. New commits use the GitHub noreply address | History rewrite or fresh repo

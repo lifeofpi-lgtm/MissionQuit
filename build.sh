@@ -4,12 +4,12 @@ set -e
 cd "$(dirname "$0")"
 
 echo "🔨 Building MissionQuit..."
-swift build
+swift build -c release
 
 APP_DIR="MissionQuit.app/Contents/MacOS"
 RES_DIR="MissionQuit.app/Contents/Resources"
 mkdir -p "$APP_DIR" "$RES_DIR"
-cp .build/debug/MissionQuit "$APP_DIR/MissionQuit"
+cp .build/release/MissionQuit "$APP_DIR/MissionQuit"
 cp Info.plist MissionQuit.app/Contents/Info.plist
 cp AppIcon.icns "$RES_DIR/AppIcon.icns"
 
@@ -19,7 +19,7 @@ if [ "$1" = "--install" ]; then
     # Update in place (preserves TCC/Accessibility permission)
     mkdir -p /Applications/MissionQuit.app/Contents/MacOS
     mkdir -p /Applications/MissionQuit.app/Contents/Resources
-    cp .build/debug/MissionQuit /Applications/MissionQuit.app/Contents/MacOS/MissionQuit
+    cp .build/release/MissionQuit /Applications/MissionQuit.app/Contents/MacOS/MissionQuit
     cp Info.plist /Applications/MissionQuit.app/Contents/Info.plist
     cp AppIcon.icns /Applications/MissionQuit.app/Contents/Resources/AppIcon.icns
     xattr -cr /Applications/MissionQuit.app
@@ -32,7 +32,7 @@ if [ "$1" = "--install" ]; then
 else
     echo ""
     echo "Dev mode — run from Terminal:"
-    echo "  .build/debug/MissionQuit"
+    echo "  .build/release/MissionQuit"
     echo ""
     echo "To install to /Applications:  bash build.sh --install"
 fi

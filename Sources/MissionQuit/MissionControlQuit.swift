@@ -3,19 +3,37 @@ import ApplicationServices
 
 /// Intercepts ⌘Q while Mission Control is active and quits
 /// the app whose window thumbnail is under the cursor.
-class MissionControlQuit {
+final class MissionControlQuit {
     fileprivate var eventTap: CFMachPort?
     fileprivate var lastQuitTime: CFAbsoluteTime = 0
+    fileprivate let systemWide = AXUIElementCreateSystemWide()
 
-    func start() {
-        // Prompt for Accessibility permission if needed
+    /// Called on the main thread whenever an app is quit through Mission Control.
+    var onQuit: ((NSRunningApplication) -> Void)?
+
+    var isRunning: Bool { eventTap != nil }
+
+    static var isTrusted: Bool { AXIsProcessTrusted() }
+
+    /// Shows the system Accessibility prompt once and returns the current trust state.
+    @discardableResult
+    static func requestAccessibility() -> Bool {
         let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
-        if !AXIsProcessTrustedWithOptions(opts) {
-            print("⚠️  Grant Accessibility permission in System Settings → Privacy & Security → Accessibility")
-        }
+        return AXIsProcessTrustedWithOptions(opts)
+    }
 
-        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+    /// Creates the event tap. Safe to call repeatedly; returns true once the tap exists.
+    @discardableResult
+    func start() -> Bool {
+        if eventTap != nil { return true }
+        guard Self.isTrusted else { return false }
 
+        // The tap callback runs synchronously on the event stream. A slow AX
+        // query would get the tap disabled by the system, so cap how long we
+        // are willing to wait on the hit-test.
+        AXUIElementSetMessagingTimeout(systemWide, 0.25)
+
+        let mask: CGEventMask = 1 << CGEventType.keyDown.rawValue
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -24,21 +42,22 @@ class MissionControlQuit {
             callback: eventTapCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            print("❌ Failed to create event tap – is Accessibility permission granted?")
-            return
+            return false
         }
 
         eventTap = tap
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
-        print("✅ MissionQuit is running – ⌘Q in Mission Control will quit the hovered app")
+        return true
     }
 
     // MARK: - Mission Control detection
 
-    /// Checks if Mission Control is currently showing by looking for
-    /// Dock-owned windows that only appear during Mission Control.
+    /// At rest the Dock owns exactly one on-screen window, named "Dock", at layer 20.
+    /// While Mission Control (or Exposé) is showing it adds unnamed windows that
+    /// cover an entire screen. Checking the layer alone is wrong: the Dock's own
+    /// window is already at layer 20, which made the old check fire all the time.
     func isMissionControlActive() -> Bool {
         guard let windowList = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
@@ -46,120 +65,53 @@ class MissionControlQuit {
             return false
         }
 
-        for win in windowList {
-            let owner = win[kCGWindowOwnerName as String] as? String
-            let name = win[kCGWindowName as String] as? String
-            let layer = win[kCGWindowLayer as String] as? Int
+        let screenFrames = NSScreen.screens.map { cgRect(for: $0) }
 
-            if owner == "Dock" {
-                if let layer = layer, layer >= 20 {
-                    return true
-                }
-                if let name = name,
-                   name.contains("Mission Control") || name.contains("Exposé") {
-                    return true
-                }
+        for win in windowList {
+            guard win[kCGWindowOwnerName as String] as? String == "Dock" else { continue }
+            if let name = win[kCGWindowName as String] as? String, name == "Dock" { continue }
+            guard let boundsDict = win[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: boundsDict) else { continue }
+            if screenFrames.contains(where: { $0.equalTo(bounds) }) {
+                return true
             }
         }
         return false
     }
 
+    /// AppKit screen frame converted to CoreGraphics coordinates (origin top-left of primary screen).
+    private func cgRect(for screen: NSScreen) -> CGRect {
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let f = screen.frame
+        return CGRect(x: f.minX, y: primaryHeight - f.maxY, width: f.width, height: f.height)
+    }
+
     // MARK: - Find app under cursor
 
-    /// Uses the Accessibility API to find which app's window thumbnail
-    /// the cursor is hovering over in Mission Control.
+    /// In Mission Control the accessibility hit-test resolves to the real
+    /// application behind the thumbnail, so the owning pid is all we need.
     func findAppUnderCursor() -> NSRunningApplication? {
-        let mouseLocation = NSEvent.mouseLocation
-        let screenHeight = NSScreen.main?.frame.height ?? 0
-        // Convert AppKit coords (origin bottom-left) to CG coords (origin top-left)
-        let cgPoint = CGPoint(x: mouseLocation.x, y: screenHeight - mouseLocation.y)
+        let mouse = NSEvent.mouseLocation
+        // Flip against the primary screen, not NSScreen.main, so secondary
+        // monitors map correctly.
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let point = CGPoint(x: mouse.x, y: primaryHeight - mouse.y)
 
-        let systemWide = AXUIElementCreateSystemWide()
         var element: AXUIElement?
-        let result = AXUIElementCopyElementAtPosition(
-            systemWide, Float(cgPoint.x), Float(cgPoint.y), &element
-        )
-
+        let result = AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &element)
         guard result == .success, let element = element else { return nil }
 
-        // Walk up the AX hierarchy to find an element with a title
-        if let app = appFromAXElement(element) {
-            return app
-        }
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(element, &pid) == .success, pid > 0,
+              let app = NSRunningApplication(processIdentifier: pid) else { return nil }
 
-        return nil
-    }
+        // Hovering Mission Control chrome (space labels, background) hits the Dock.
+        // Never quit the Dock, ourselves, or background-only processes.
+        guard app.bundleIdentifier != "com.apple.dock",
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              app.activationPolicy == .regular else { return nil }
 
-    /// Extracts a running application from an AX element by matching its
-    /// title against running app names, walking up the hierarchy if needed.
-    private func appFromAXElement(_ element: AXUIElement) -> NSRunningApplication? {
-        var current: AXUIElement? = element
-        var visited = 0
-
-        while let el = current, visited < 10 {
-            visited += 1
-
-            // Check title attribute
-            if let title = axStringAttribute(el, kAXTitleAttribute) {
-                if let app = matchAppByName(title) {
-                    return app
-                }
-            }
-
-            // Check description
-            if let desc = axStringAttribute(el, kAXDescriptionAttribute) {
-                if let app = matchAppByName(desc) {
-                    return app
-                }
-            }
-
-            // Check value
-            if let value = axStringAttribute(el, kAXValueAttribute) {
-                if let app = matchAppByName(value) {
-                    return app
-                }
-            }
-
-            // Walk up to parent
-            var parent: AnyObject?
-            let err = AXUIElementCopyAttributeValue(el, kAXParentAttribute as CFString, &parent)
-            if err == .success {
-                current = (parent as! AXUIElement)
-            } else {
-                break
-            }
-        }
-
-        return nil
-    }
-
-    private func axStringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
-        var value: AnyObject?
-        let err = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
-        guard err == .success else { return nil }
-        return value as? String
-    }
-
-    private func matchAppByName(_ name: String) -> NSRunningApplication? {
-        let apps = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular // only GUI apps
-        }
-
-        // Exact match on localized name
-        if let app = apps.first(where: { $0.localizedName == name }) {
-            return app
-        }
-
-        // Partial / case-insensitive match
-        let lower = name.lowercased()
-        if let app = apps.first(where: { ($0.localizedName?.lowercased() ?? "").contains(lower) }) {
-            return app
-        }
-        if let app = apps.first(where: { lower.contains($0.localizedName?.lowercased() ?? "🚫") }) {
-            return app
-        }
-
-        return nil
+        return app
     }
 }
 
@@ -185,37 +137,36 @@ private func eventTapCallback(
         return Unmanaged.passUnretained(event)
     }
 
-    // Only care about keyDown
     guard type == .keyDown else {
         return Unmanaged.passUnretained(event)
     }
 
+    // ⌘Q → keycode 12 (Q) with Command as the only modifier.
+    // Ignore lock/state bits so caps lock or fn don't break the match, but
+    // leave ⌘⌥Q, ⌘⇧Q, etc. alone since apps bind those separately.
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    let flags = event.flags
-
-    // ⌘Q → keycode 12 (Q) + command flag
-    guard keyCode == 12, flags.contains(.maskCommand) else {
+    let modifiers = event.flags.intersection([.maskCommand, .maskShift, .maskAlternate, .maskControl])
+    guard keyCode == 12, modifiers == .maskCommand else {
         return Unmanaged.passUnretained(event)
     }
 
-    // Only intercept when Mission Control is active
     guard monitor.isMissionControlActive() else {
         return Unmanaged.passUnretained(event)
     }
 
-    // Debounce — ignore if we just quit something (key repeat)
+    // Inside Mission Control we own ⌘Q. Holding the key or pressing it twice
+    // must not quit a second app, and if we can't tell what's under the cursor
+    // it is safer to do nothing than to let ⌘Q reach the frontmost app.
+    let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
     let now = CFAbsoluteTimeGetCurrent()
-    guard now - monitor.lastQuitTime > 0.5 else {
-        return nil // swallow repeated ⌘Q events
+    guard !isRepeat, now - monitor.lastQuitTime > 0.5 else {
+        return nil
     }
 
-    // Find and quit the app under the cursor
     if let app = monitor.findAppUnderCursor() {
         monitor.lastQuitTime = now
         app.terminate()
-        return nil // swallow the event
+        DispatchQueue.main.async { monitor.onQuit?(app) }
     }
-
-    // Couldn't identify an app – let ⌘Q pass through
-    return Unmanaged.passUnretained(event)
+    return nil
 }

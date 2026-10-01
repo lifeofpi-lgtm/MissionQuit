@@ -4,10 +4,10 @@ Quit apps directly from Mission Control on macOS. Hover over a window thumbnail 
 
 ## How it works
 
-1. Installs a global event tap that listens for ⌘Q
-2. Detects if Mission Control is active (via Dock window inspection)
-3. Uses the Accessibility API to identify the app under your cursor
-4. Terminates that app — ⌘Q works normally outside Mission Control
+1. Installs a global event tap that listens for ⌘Q (Command as the only modifier)
+2. Detects Mission Control by looking for the full-screen windows the Dock adds while it is showing
+3. Hit-tests the cursor with the Accessibility API; in Mission Control this resolves to the real app behind the thumbnail
+4. Asks that app to quit. Outside Mission Control ⌘Q passes through untouched. Inside it, if nothing quittable is under the cursor, ⌘Q is swallowed so it can't reach the frontmost app
 
 ## Requirements
 
@@ -17,10 +17,10 @@ Quit apps directly from Mission Control on macOS. Hover over a window thumbnail 
 ## Build & Run
 
 ```bash
-swift build
+swift build -c release
 open MissionQuit.app
 # or run directly:
-.build/debug/MissionQuit
+.build/release/MissionQuit
 ```
 
 To create the app bundle:
@@ -32,5 +32,8 @@ bash build.sh
 ## Menu bar
 
 MissionQuit runs as a menu bar app (⌘Q icon). From the menu you can:
+- See whether the tap is active, or open Accessibility settings if permission is missing
 - Toggle **Launch at Login**
 - Quit MissionQuit
+
+The icon briefly shows ✓ after a quit from Mission Control.

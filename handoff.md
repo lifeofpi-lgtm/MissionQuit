@@ -18,9 +18,9 @@
 - Rebase done 2026-10-01: `git rebase origin/main` put the Mission Control fix and the handoff commits on top of
   the license commit a081e3b, and the three local commits were re-authored with the noreply address. Reviewed
   before rebasing: no emails, local paths or secrets in the code, README, CLAUDE.md, handoff.md or decisions.md.
-- NOT PUSHED YET. The public repo still has the old, buggy Mission Control detection until `git push` runs.
-  Pushing also makes CLAUDE.md, handoff.md and decisions.md public (they are tracked). Keep handoff.md free of
-  personal emails and local paths, or gitignore and untrack them first.
+- Pushed 2026-10-01 (a081e3b..8ed2f54). The public repo now has the Mission Control fix. CLAUDE.md, handoff.md
+  and decisions.md are public because they are tracked, so keep handoff.md free of personal emails and local
+  paths, or gitignore and untrack them.
 
 ## Last Session Summary (2026-08-26)
 Reworked the core of MissionQuit after empirical probing showed the original logic was wrong in two places:

@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-10-02 Session close-out: history reconciled and pushed
+
+### Changes made
+- Fetched origin, found main ahead 2 and behind 1, and ran `git rebase origin/main` with an `--exec` step that
+  re-authored every local commit with the GitHub noreply address. The Mission Control fix (now db6b254) and the
+  handoff commits sit on top of the license commit a081e3b.
+- Replaced a personal email address in this file's earlier entry with "the Gmail address" before it went public.
+- Pushed to origin/main (a081e3b..8ed2f54, then a follow-up docs commit recording the push). Local main is level
+  with origin/main.
+
+### Verified
+- Before the rebase: grepped CLAUDE.md, handoff.md, decisions.md, README.md, Sources, build.sh and Info.plist for
+  emails, /Users paths and secret-like strings; the only hit was the bundle ID com.pirshad.MissionQuit.
+- After the push: the GitHub commits API listed the new commits, all with the noreply email.
+
+### Not verified
+- The app was not rebuilt or launched from the rebased tree, and the Mission Control fix has not been re-tested
+  since it was published.
+
+### Deferred
+- CLAUDE.md, handoff.md and decisions.md are tracked and therefore public. Keep them free of personal emails and
+  local paths, or gitignore and untrack them.
+- The six oldest public commits still show the Gmail author address (Irshad chose not to rewrite).
+
 ## 2026-10-01 Session: license added on GitHub (done from a scratchpad clone, not this folder)
 
 ### Changes made

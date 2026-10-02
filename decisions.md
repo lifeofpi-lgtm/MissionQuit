@@ -12,3 +12,5 @@ _Architectural and design decisions for this project. Updated by Claude Code dur
 - **2026-08-26** | Ship release builds from build.sh | No reason to install a debug binary | Debug (original)
 - **2026-10-01** | Add an MIT license (holder "Pasha I.") | Without a license nobody may legally reuse the public code; matches the MDmaster repo | GPL (not chosen, no reason to force derivatives open)
 - **2026-10-01** | Leave the Gmail author email in the six existing public commits | Irshad chose not to rewrite; a fresh repo would break the already-public URL. New commits use the GitHub noreply address | History rewrite or fresh repo
+- **2026-10-02** | Re-author the unpushed local commits with the noreply address during the rebase | They were not public yet, so rewriting them costs nothing and avoids adding more Gmail-authored commits | Keep the Gmail author on them
+- **2026-10-02** | Keep CLAUDE.md, handoff.md and decisions.md tracked (public) after a content review | Existing setup for this repo, reviewed clean of emails, paths and secrets | Untrack and gitignore them as done for the MD editor project

@@ -16,6 +16,11 @@ cp AppIcon.icns "$RES_DIR/AppIcon.icns"
 echo "✅ Built MissionQuit.app"
 
 if [ "$1" = "--install" ]; then
+    # Stop the running copy first: overwriting a signed binary that is mapped
+    # into a live process can get that process killed by code signing.
+    pkill -x MissionQuit || true
+    sleep 1
+
     # Update in place (preserves TCC/Accessibility permission)
     mkdir -p /Applications/MissionQuit.app/Contents/MacOS
     mkdir -p /Applications/MissionQuit.app/Contents/Resources
@@ -26,9 +31,10 @@ if [ "$1" = "--install" ]; then
     codesign --force --deep --sign "MissionQuit Dev" /Applications/MissionQuit.app
     echo "🔏 Code-signed (MissionQuit Dev)"
     echo "📦 Installed to /Applications/MissionQuit.app"
+    open /Applications/MissionQuit.app
+    echo "▶️  Relaunched"
     echo ""
     echo "⚠️  Grant Accessibility permission in System Settings if this is the first install."
-    echo "To run:  open /Applications/MissionQuit.app"
 else
     echo ""
     echo "Dev mode — run from Terminal:"

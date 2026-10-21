@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-10-21 Session: macOS 27 broke Mission Control detection and app lookup; fixed
+
+### Root cause (probed on macOS 27.0.1, build 26A434)
+- Detection: the Dock's own window is now full-screen at all times, so the old Dock check was true everywhere and ⌘Q was being intercepted outside Mission Control too. Mission Control itself now belongs to WindowManager.
+- Lookup: inside Mission Control the AX hit-test returns WindowManager thumbnail buttons, not the real app, so every ⌘Q was swallowed. That is the "does nothing" symptom.
+- The app was also not running at session start; no crash report or log entry explains why.
+
+### Changes made
+- MissionControlQuit.swift: OS-gated detection (WindowManager on 27+, Dock before), thumbnail lookup via the button's `wid` attribute, cursor taken from a fresh CGEvent (CG coordinates, no flip), and a fix for an over-release in requestAccessibility (takeRetainedValue on a global constant).
+- AppDelegate.swift: the menu shows "permission needed" if trust is revoked while the tap exists.
+- build.sh: --install stops the running app first and relaunches it after.
+
+### Verified
+- A scratch probe build (installed temporarily under the same signature, then replaced) ran the shipped functions: detection true in Mission Control, false at rest, in the ⌘Tab switcher and in a fullscreen app. A 30-point grid in Mission Control resolved every thumbnail to the correct app in about 5 ms and returned nil on background and the Spaces bar.
+- Fixed build installed with build.sh --install and running; installed binary contains no probe code.
+
+### Not verified
+- An actual ⌘Q quit by hand (left for Irshad).
+- Multiple displays, multiple Spaces, Stage Manager off (Stage Manager was on during probing), the pre-27 Dock path.
+
+### Next steps
+- Hand test: ⌘Q on a thumbnail quits that app; ⌘Q on background or the Spaces bar does nothing; ⌘Q outside Mission Control quits the frontmost app normally.
+- Review proposals not applied are listed in the session report (diagnostics menu item, Package.swift unsafeFlags, stale duplicate login item).
+
 ## 2026-10-02 Session close-out: history reconciled and pushed
 
 ### Changes made

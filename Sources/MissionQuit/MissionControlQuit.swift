@@ -18,7 +18,8 @@ final class MissionControlQuit {
     /// Shows the system Accessibility prompt once and returns the current trust state.
     @discardableResult
     static func requestAccessibility() -> Bool {
-        let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+        // Unretained: this is a global constant, and taking a +1 on every call over-releases it.
+        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         return AXIsProcessTrustedWithOptions(opts)
     }
 
@@ -54,10 +55,15 @@ final class MissionControlQuit {
 
     // MARK: - Mission Control detection
 
-    /// At rest the Dock owns exactly one on-screen window, named "Dock", at layer 20.
-    /// While Mission Control (or Exposé) is showing it adds unnamed windows that
-    /// cover an entire screen. Checking the layer alone is wrong: the Dock's own
-    /// window is already at layer 20, which made the old check fire all the time.
+    /// macOS 27 moved Mission Control from the Dock into WindowManager, and the
+    /// Dock's own window now covers the whole screen at all times, so the old
+    /// Dock check fired everywhere.
+    private static let usesWindowManager = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27
+
+    /// Mission Control puts a window over an entire screen, owned by WindowManager
+    /// on macOS 27+ or by the Dock (unnamed, alongside its "Dock" window) before
+    /// that. Window names need Screen Recording permission and usually read as
+    /// nil, so the decision rests on owner and bounds only.
     func isMissionControlActive() -> Bool {
         guard let windowList = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
@@ -65,10 +71,11 @@ final class MissionControlQuit {
             return false
         }
 
+        let owner = Self.usesWindowManager ? "WindowManager" : "Dock"
         let screenFrames = NSScreen.screens.map { cgRect(for: $0) }
 
         for win in windowList {
-            guard win[kCGWindowOwnerName as String] as? String == "Dock" else { continue }
+            guard win[kCGWindowOwnerName as String] as? String == owner else { continue }
             if let name = win[kCGWindowName as String] as? String, name == "Dock" { continue }
             guard let boundsDict = win[kCGWindowBounds as String] as? NSDictionary,
                   let bounds = CGRect(dictionaryRepresentation: boundsDict) else { continue }
@@ -88,30 +95,63 @@ final class MissionControlQuit {
 
     // MARK: - Find app under cursor
 
-    /// In Mission Control the accessibility hit-test resolves to the real
-    /// application behind the thumbnail, so the owning pid is all we need.
-    func findAppUnderCursor() -> NSRunningApplication? {
-        let mouse = NSEvent.mouseLocation
-        // Flip against the primary screen, not NSScreen.main, so secondary
-        // monitors map correctly.
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-        let point = CGPoint(x: mouse.x, y: primaryHeight - mouse.y)
+    /// `point` is in CoreGraphics global coordinates (top-left origin of the primary display).
+    func findApp(at point: CGPoint) -> NSRunningApplication? {
+        let pid = Self.usesWindowManager ? thumbnailOwnerPid(at: point) : hitTestPid(at: point)
+        guard let pid, pid > 0, let app = NSRunningApplication(processIdentifier: pid) else { return nil }
 
-        var element: AXUIElement?
-        let result = AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &element)
-        guard result == .success, let element = element else { return nil }
-
-        var pid: pid_t = 0
-        guard AXUIElementGetPid(element, &pid) == .success, pid > 0,
-              let app = NSRunningApplication(processIdentifier: pid) else { return nil }
-
-        // Hovering Mission Control chrome (space labels, background) hits the Dock.
         // Never quit the Dock, ourselves, or background-only processes.
         guard app.bundleIdentifier != "com.apple.dock",
               app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
               app.activationPolicy == .regular else { return nil }
 
         return app
+    }
+
+    /// macOS 27+: thumbnails are WindowManager buttons under an "mc.display" group,
+    /// and each carries the real CGWindowID in a "wid" attribute. Asking WindowManager
+    /// directly means a hit-test that falls through to the live windows behind the
+    /// overlay (seen while Mission Control animates) can never pick the wrong app.
+    private func thumbnailOwnerPid(at point: CGPoint) -> pid_t? {
+        guard let wmPid = NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.apple.WindowManager").first?.processIdentifier else { return nil }
+        let wm = AXUIElementCreateApplication(wmPid)
+
+        var element: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(wm, Float(point.x), Float(point.y), &element) == .success,
+              let button = element,
+              stringAttribute(button, kAXRoleAttribute) == kAXButtonRole,
+              let parent = elementAttribute(button, kAXParentAttribute),
+              stringAttribute(parent, kAXIdentifierAttribute) == "mc.display" else { return nil }
+
+        var wid: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(button, "wid" as CFString, &wid) == .success,
+              let windowID = (wid as? NSNumber)?.uint32Value,
+              let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, windowID) as? [[String: Any]])?.first,
+              let ownerPid = info[kCGWindowOwnerPID as String] as? pid_t else { return nil }
+        return ownerPid
+    }
+
+    /// Before macOS 27 the system-wide hit-test resolved straight to the app behind the thumbnail.
+    private func hitTestPid(at point: CGPoint) -> pid_t? {
+        var element: AXUIElement?
+        var pid: pid_t = 0
+        guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &element) == .success,
+              let element, AXUIElementGetPid(element, &pid) == .success else { return nil }
+        return pid
+    }
+
+    private func elementAttribute(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)
+    }
+
+    private func stringAttribute(_ element: AXUIElement, _ name: String) -> String? {
+        var value: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, name as CFString, &value)
+        return value as? String
     }
 }
 
@@ -163,7 +203,9 @@ private func eventTapCallback(
         return nil
     }
 
-    if let app = monitor.findAppUnderCursor() {
+    // A fresh event reports the cursor in CG coordinates, so there is no AppKit
+    // flip to get wrong on secondary displays.
+    if let cursor = CGEvent(source: nil)?.location, let app = monitor.findApp(at: cursor) {
         monitor.lastQuitTime = now
         app.terminate()
         DispatchQueue.main.async { monitor.onQuit?(app) }

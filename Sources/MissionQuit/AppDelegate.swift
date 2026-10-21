@@ -47,7 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        if monitor.isRunning {
+        // The tap outlives a revoked permission, so check trust too or the menu claims "Active" while nothing works.
+        if monitor.isRunning && MissionControlQuit.isTrusted {
             let item = NSMenuItem(title: "Active: ⌘Q in Mission Control quits the hovered app", action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu.addItem(item)

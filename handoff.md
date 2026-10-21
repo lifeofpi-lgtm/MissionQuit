@@ -16,12 +16,12 @@
 - A scratch probe build (installed temporarily under the same signature, then replaced) ran the shipped functions: detection true in Mission Control, false at rest, in the ⌘Tab switcher and in a fullscreen app. A 30-point grid in Mission Control resolved every thumbnail to the correct app in about 5 ms and returned nil on background and the Spaces bar.
 - Fixed build installed with build.sh --install and running; installed binary contains no probe code.
 
+- Irshad tested ⌘Q in Mission Control by hand on 2026-10-21 and confirmed it works.
+
 ### Not verified
-- An actual ⌘Q quit by hand (left for Irshad).
 - Multiple displays, multiple Spaces, Stage Manager off (Stage Manager was on during probing), the pre-27 Dock path.
 
 ### Next steps
-- Hand test: ⌘Q on a thumbnail quits that app; ⌘Q on background or the Spaces bar does nothing; ⌘Q outside Mission Control quits the frontmost app normally.
 - Review proposals not applied are listed in the session report (diagnostics menu item, Package.swift unsafeFlags, stale duplicate login item).
 
 ## 2026-10-02 Session close-out: history reconciled and pushed

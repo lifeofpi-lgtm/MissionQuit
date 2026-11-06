@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-11-06 Session: fresh clone and install on a Mac without the signing certificate
+
+### Changes made
+- Cloned the repo from GitHub into a new local project folder (`gh repo clone` timed out talking to the GitHub API,
+  so plain `git clone` over HTTPS was used). No source files changed.
+- Built with `swift build -c release` (Swift 6.4.2, macOS 27.2) and installed to /Applications/MissionQuit.app by
+  running build.sh's --install steps by hand, signing ad-hoc (`codesign --sign -`) because this Mac has no
+  "MissionQuit Dev" identity (`security find-identity -v -p codesigning` found 0). build.sh was not edited.
+
+### Verified
+- `codesign --verify` passed on the installed app, and the app launched and stayed running.
+- Irshad granted Accessibility permission. The app polls for trust every 2 s and starts the tap without a relaunch.
+
+### Not verified
+- ⌘Q in Mission Control was not tested on this install, and the menu was not checked for "Active".
+
+### Deferred
+- Create a self-signed code-signing certificate named "MissionQuit Dev" in Keychain Access on this Mac. Until then
+  `bash build.sh --install` fails at the codesign step, and each ad-hoc rebuild may make macOS ask for
+  Accessibility again.
+- The release link step warns about missing CommandLineTools search paths (`.../CommandLineTools/Developer/usr/lib`
+  and `.../Library/Frameworks`). The build succeeds; the cause was not looked into (possibly the `unsafeFlags` in
+  Package.swift, already on the review list).
+- gh CLI requests to api.github.com timed out during TLS handshake this session; plain git worked.
+
 ## 2026-10-21 Session: macOS 27 broke Mission Control detection and app lookup; fixed
 
 ### Root cause (probed on macOS 27.0.1, build 26A434)
